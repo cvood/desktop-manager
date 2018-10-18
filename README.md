@@ -1,4 +1,4 @@
-# wallpaper-insteal
+# desktop-manager
 
 > an app to instead desktop wallpaper made of electron-vue
 
