@@ -2,7 +2,8 @@
     <div id="wallpaper">
         <el-container>
             <div id="bg">
-                <img :src="backgroundImageUrl" alt="background-image">
+                <!-- <img :src="backgroundImageUrl" alt="background-image"> -->
+                <img v-bind:src="backgroundImageUrl" alt="background-image">
             </div>
             <el-main>
                 <el-row :gutter='10'>
@@ -10,7 +11,7 @@
                         <el-card>
                             <div slot="header" class="clearfix">
                                 <span>桌面图标</span>
-                                <el-button style="float: right; padding: 3px 0" type="text" v-on:click="getDesktopIcon" icon="el-icon-refresh">刷新</el-button>
+                                <el-button style="float: right; padding: 3px 0" type="text" v-on:click="refreshPage" icon="el-icon-refresh">刷新</el-button>
                             </div>
                             <div class="icon-box">
                               <el-row>
@@ -27,6 +28,7 @@
                           <div slot="header" class="clearfix">
                               <span>常用软件</span>
                               <el-button style="float: right; padding: 3px 0" type="text" v-on:click="addIcon" icon="el-icon-refresh">添加</el-button>
+                              <el-button style="float: right; padding: 3px 0" type="text" v-on:click="setBackgroundPath" icon="el-icon-tickets">更换壁纸</el-button>
                           </div>
                           <div class="icon-box">
                             <el-row>
@@ -52,7 +54,7 @@
     </div>
 </template>
 <style scoped>
-  #bg {
+  /* #bg {
       position: fixed;
       top: -50%;
       left: -50%;
@@ -68,10 +70,24 @@
       right: 0;
       bottom: 0;
       margin: auto;
-      /* preserve aspet ratio */
       min-width: 50%;
       min-height: 50%;
+  } */
+
+  #bg {
+    position:fixed;
+    z-index: -1;
+    top:0;
+    left:0;
+    right:0;
+    bottom:0;
   }
+
+  #bg img{
+    width: 100%;
+    height: 100%;
+    object-fit:cover;
+}
 
   .clearfix:before,
   .clearfix:after {
@@ -111,26 +127,60 @@
   }
 </style>
 <script>
-import { remote } from 'electron'
+import {remote} from 'electron'
 import fs from 'fs'
 import path from 'path'
+
 export default {
   data () {
     return {
       tableFile: [],
       customIcon: [],
       time: '',
-      backgroundImageUrl: ''
+      backgroundImageUrl: '',
+      config: {imagePath: ''}
     }
   },
   mounted () {
+    this.getConfig()
     this.getDesktopIcon()
     this.refreshTime()
     this.getCustomIcon()
     this.ignoreMouse()
-    this.changeImage()
+    console.log('mounted', this.config)
   },
   methods: {
+    setBackgroundPath () {
+      let defaultPath = remote.app.getPath('pictures')
+      let backgroundPath = remote.dialog.showOpenDialog({defaultPath: defaultPath, properties: ['openDirectory']})
+      this.$db.update({type: 'config'}, {$set: {type: 'config', imagePath: backgroundPath[0]}}, {upsert: true}, (err, result) => {
+        if (err) {
+          console.log(err)
+        }
+      })
+      this.getConfig()
+      this.changeImage()
+    },
+    getConfig () {
+      let self = this
+      self.$db.findOne({type: 'config'}, (err, result) => {
+        if (err) {
+          console.log(err)
+        }
+        if (result === null) {
+          return
+        }
+        if (result.hasOwnProperty('imagePath')) {
+          self.config = result
+          console.log('getConfig', self.config)
+          if (this.config.imagePath !== '') {
+            this.changeImage()
+          } else {
+            this.backgroundImageUrl = 'https://i.loli.net/2018/10/16/5bc5c350bd3c4.jpg'
+          }
+        }
+      })
+    },
     getDesktopIcon () {
       let deskPath = remote.app.getPath('desktop')
       let publicPath = 'C:\\Users\\Public\\Desktop'
@@ -198,7 +248,7 @@ export default {
               console.log(err)
             }
             let iconSrc = icon.toDataURL()
-            _self.$db.insert({filename: filename, icon: iconSrc, path: element}, (err, newDoc) => {
+            _self.$db.insert({type: 'icon', filename: filename, icon: iconSrc, path: element}, (err, newDoc) => {
               if (err) {
                 console.log(err)
               }
@@ -212,7 +262,7 @@ export default {
               console.log(err)
             }
             let iconSrc = icon.toDataURL()
-            _self.$db.insert({filename: filename, icon: iconSrc, path: targetPath}, (err, newDoc) => {
+            _self.$db.insert({type: 'icon', filename: filename, icon: iconSrc, path: targetPath}, (err, newDoc) => {
               if (err) {
                 console.log(err)
               }
@@ -224,7 +274,7 @@ export default {
     },
     getCustomIcon () {
       let _self = this
-      _self.$db.find({}, (err, docs) => {
+      _self.$db.find({type: 'icon'}, (err, docs) => {
         if (err) {
           console.log(err)
         }
@@ -244,9 +294,14 @@ export default {
       }
     },
     changeImage () {
-      this.backgroundImageUrl = 'https://source.unsplash.com/random'
+      let self = this
+      let imagePath = self.config['imagePath']
+      console.log(imagePath)
+      let images = fs.readdirSync(imagePath)
+      let index = Math.floor(Math.random() * images.length)
+      self.backgroundImageUrl = path.join(imagePath, images[index])
       setTimeout(() => {
-        this.changeImage()
+        self.changeImage()
       }, 1000 * 60 * 5)
     },
     refreshTime () {
@@ -254,6 +309,10 @@ export default {
       setTimeout(() => {
         this.refreshTime()
       }, 500)
+    },
+    refreshPage () {
+      let thisWindow = remote.getCurrentWindow()
+      thisWindow.reload()
     }
   }
 }

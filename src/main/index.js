@@ -11,7 +11,7 @@ if (process.env.NODE_ENV !== 'development') {
   global.__static = require('path').join(__dirname, '/static').replace(/\\/g, '\\\\')
 }
 
-let wins = []
+var wins = []
 
 const winURL = process.env.NODE_ENV === 'development'
   ? `http://localhost:9080`
@@ -23,6 +23,7 @@ function createWindows () {
    */
   createTray()
   let displays = screen.getAllDisplays()
+
   for (let index = 0; index < displays.length; index++) {
     const element = displays[index]
     createWindow(wins[index], element)
@@ -40,6 +41,7 @@ function createWindow (mainWindow, display) {
     useContentSize: true,
     resizable: false,
     minimizable: false,
+    webPreferences: {webSecurity: false},
     skipTaskbar: true
   })
 
@@ -63,7 +65,6 @@ function createTray () {
 }
 
 app.on('ready', createWindows)
-console.log(wins.length)
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
